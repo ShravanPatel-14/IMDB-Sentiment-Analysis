@@ -1,17 +1,3 @@
-# __pycache__
-# *.pyc
-# *.pyo
-# *.pyd
-# venv
-# imdb_venv
-# .env
-# *.ckpt*
-# runs/
-# .tf_cache/
-# .ipynb_checkpoints
-# *.sqlite
-# .DS_Store
-
 __pycache__
 *.pyc
 imdb_venv
