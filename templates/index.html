@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IMDB Sentiment — Demo UI</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#10b981;--danger:#ef4444}
+    body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(180deg,#071025 0%,#0f1724 100%);color:#e6eef6;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .wrap{width:100%;max-width:900px}
+    .card{background:rgba(255,255,255,0.03);border-radius:12px;padding:20px;box-shadow:0 6px 18px rgba(2,6,23,0.6);border:1px solid rgba(255,255,255,0.03)}
+    h1{margin:0 0 8px;font-size:20px}
+    p.lead{margin:0 0 16px;color:var(--muted)}
+    textarea{width:100%;min-height:120px;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;resize:vertical;font-size:14px}
+    .row{display:flex;gap:12px;margin-top:12px}
+    button{background:var(--accent);border:none;padding:10px 14px;border-radius:8px;color:#042017;font-weight:600;cursor:pointer}
+    button[disabled]{opacity:.6;cursor:default}
+    .results{margin-top:16px}
+    .item{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.02)}
+    .meta{font-size:13px;color:var(--muted);margin-top:6px}
+    .prob{display:inline-block;padding:6px 8px;border-radius:6px;background:rgba(255,255,255,0.02);margin-right:8px}
+    .loader{display:inline-block;width:18px;height:18px;border-radius:50%;border:3px solid rgba(255,255,255,0.08);border-top-color:var(--accent);animation:spin 1s linear infinite;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .small{font-size:13px;color:var(--muted)}
+    footer{margin-top:16px;color:var(--muted);font-size:13px;text-align:right}
+    .error{color:var(--danger);font-weight:600}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>IMDB Sentiment Demo</h1>
+      <p class="lead">Enter one or more reviews (separate lines). Click <strong>Predict</strong> to send them to the model.</p>
+
+      <label class="small">Input (one review per line):</label>
+      <textarea id="inputText" placeholder="I loved this movie!&#10;Terrible movie..."></textarea>
+
+      <div class="row">
+        <button id="btnPredict">Predict</button>
+        <button id="btnClear" style="background:#334155;color:#fff">Clear</button>
+        <div style="flex:1"></div>
+        <span id="status" class="small"></span>
+      </div>
+
+      <div class="results" id="results"></div>
+      <footer>Model: <strong>distilbert-base-uncased</strong> • Endpoint: <code>/predict</code></footer>
+    </div>
+  </div>
+
+<script>
+const btn = document.getElementById('btnPredict')
+const clearBtn = document.getElementById('btnClear')
+const ta = document.getElementById('inputText')
+const results = document.getElementById('results')
+const status = document.getElementById('status')
+
+function makePayload(lines){
+  // remove empty lines
+  const texts = lines.map(s => s.trim()).filter(s => s.length>0)
+  return { texts }
+}
+
+function showStatus(msg, isError=false){
+  status.textContent = msg
+  status.className = isError ? 'error' : 'small'
+}
+
+function renderResults(items){
+  results.innerHTML = ''
+  if(!items || items.length===0){
+    results.innerHTML = '<div class="small">No results</div>'
+    return
+  }
+  for(const it of items){
+    const div = document.createElement('div')
+    div.className = 'item'
+    const title = document.createElement('div')
+    title.textContent = it.text
+    const pred = document.createElement('div')
+    const predLabel = it.pred===1 ? 'Positive' : 'Negative'
+    pred.innerHTML = `<strong>Prediction:</strong> ${predLabel} <span class="meta"> (class ${it.pred})</span>`
+    const probs = document.createElement('div')
+    probs.className = 'meta'
+    // show probs nicely
+    const p0 = document.createElement('span'); p0.className='prob'; p0.textContent = `neg: ${ (it.probs[0]*100).toFixed(1) }%`
+    const p1 = document.createElement('span'); p1.className='prob'; p1.textContent = `pos: ${ (it.probs[1]*100).toFixed(1) }%`
+    probs.appendChild(p0); probs.appendChild(p1)
+    div.appendChild(title); div.appendChild(pred); div.appendChild(probs)
+    results.appendChild(div)
+  }
+}
+
+btn.addEventListener('click', async ()=>{
+  const raw = ta.value.split('\n')
+  const payload = makePayload(raw)
+  if(payload.texts.length===0){ showStatus('Enter at least one text', true); return }
+  // show loading
+  btn.disabled = true
+  btn.innerHTML = '<span class="loader"></span> Predicting...'
+  showStatus('Sending request...')
+  results.innerHTML = ''
+  try{
+    const resp = await fetch('/predict', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    })
+    if(!resp.ok){
+      const err = await resp.json().catch(()=>({error:'unknown'}))
+      showStatus('Error: ' + (err.error||err.details||resp.statusText), true)
+      btn.disabled=false
+      btn.innerHTML = 'Predict'
+      return
+    }
+    const data = await resp.json()
+    showStatus('Done')
+    renderResults(data.predictions)
+  }catch(e){
+    showStatus('Request failed: ' + e.message, true)
+  }finally{
+    btn.disabled = false
+    btn.innerHTML = 'Predict'
+  }
+})
+
+clearBtn.addEventListener('click', ()=>{
+  ta.value = ''
+  results.innerHTML = ''
+  showStatus('')
+})
+</script>
+
+</body>
+</html>
