@@ -1,38 +1,29 @@
+# Dockerfile - lightweight image for Render (no TensorFlow)
+FROM python:3.11-slim
 
-FROM python:3.12-slim
-
-# avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-
 WORKDIR /app
 
-# system deps (git optional)
+# System deps (basic build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    git \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# copy only trimmed requirements for docker layer caching
-COPY requirements.docker.txt /app/requirements.txt
+# Install Python deps
+COPY requirements.render.txt /app/requirements.txt
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r /app/requirements.txt
 
-# install pip deps
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-# copy the rest of the app
+# Copy app code
 COPY . /app
 
-# Expose port used by Flask app
+# Expose Flask port
 EXPOSE 5000
 
-# env defaults (can be overridden by docker run -e)
-ENV MODEL_DIR=/app/tf_distilbert_imdb
+# Environment defaults
 ENV PORT=5000
 ENV HOST=0.0.0.0
-ENV LOG_LEVEL=INFO
 
-# run with gunicorn (production-ish)
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "2", "--timeout", "120", "app:app"]
+# Use gunicorn to serve app_render:app
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "2", "--timeout", "120", "app_render:app"]
