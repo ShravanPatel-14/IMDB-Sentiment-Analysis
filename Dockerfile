@@ -27,12 +27,4 @@ EXPOSE 5000
 
 # Run the lightweight HF pipeline app, NOT the old TF app
 # app_render.py contains: app = Flask(__name__)
-CMD ["gunicorn",
-     "--bind", "0.0.0.0:5000",
-     "--workers", "1",
-     "--threads", "2",
-     "--timeout", "120",
-     "app_render:app"]
-
-
-
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "2", "--timeout", "120", "app_render:app"]
