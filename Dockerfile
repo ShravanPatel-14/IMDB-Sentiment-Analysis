@@ -1,24 +1,21 @@
-
 FROM python:3.12-slim
 
 # avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV TRANSFORMERS_CACHE=/tmp/hf-cache
 
 WORKDIR /app
 
-# system deps (git optional)
+# system deps (enough for transformers/torch)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# copy only trimmed requirements for docker layer caching
-COPY requirements.docker.txt /app/requirements.txt
-
-# install pip deps
+# install Python deps (from slim runtime requirements)
+COPY requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
@@ -28,11 +25,14 @@ COPY . /app
 # Expose port used by Flask app
 EXPOSE 5000
 
-# env defaults (can be overridden by docker run -e)
-ENV MODEL_DIR=/app/tf_distilbert_imdb
-ENV PORT=5000
-ENV HOST=0.0.0.0
-ENV LOG_LEVEL=INFO
+# Run the lightweight HF pipeline app, NOT the old TF app
+# app_render.py contains: app = Flask(__name__)
+CMD ["gunicorn",
+     "--bind", "0.0.0.0:5000",
+     "--workers", "1",
+     "--threads", "2",
+     "--timeout", "120",
+     "app_render:app"]
 
-# run with gunicorn (production-ish)
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "2", "--timeout", "120", "app:app"]
+
+
